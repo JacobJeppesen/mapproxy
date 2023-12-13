@@ -1472,14 +1472,22 @@ class CacheConfiguration(ConfigurationBase):
             if source_name in self.context.sources:
                 tiled_only = False
                 break
-            elif source_name in self.context.caches:
-                cache_conf = self.context.caches[source_name]
-                tiled_only = cache_conf.supports_tiled_only_access(
-                    params={'format': request_format},
-                    tile_grid=grid_conf.tile_grid(),
-                )
-                if not tiled_only:
-                    break
+            ############################
+            ### START TEMPORARY HACK ###
+            # Out-comment the code below, as it leads to recursive calls of of the cache() method. This makes the
+            # startup time of the MapProxy app much higher. However, the recursion issue seems to only happen for
+            # caches that are composed of multiple other caches. So if your caches are not composed of other caches,
+            # then there shouldn't be a problem.
+            # elif source_name in self.context.caches:
+            #     cache_conf = self.context.caches[source_name]
+            #     tiled_only = cache_conf.supports_tiled_only_access(
+            #         params={'format': request_format},
+            #         tile_grid=grid_conf.tile_grid(),
+            #     )
+            #     if not tiled_only:
+            #         break
+            ### END TEMPORARY HACK ###
+            ##########################
 
         for source_name in source_names:
             if source_name in self.context.sources:
