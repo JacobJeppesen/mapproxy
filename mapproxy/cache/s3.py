@@ -37,6 +37,18 @@ except ImportError:
 import logging
 log = logging.getLogger('mapproxy.cache.s3')
 
+############################
+### START TEMPORARY HACK ###
+# Use a global cache for connected buckets. Previously, if multiple caches used the same S3 bucket, each would fetch the
+# same connection info for the bucket, which is slow. This global cache ensures that connection info is only fetched
+# once per bucket.
+CONNECTED_BUCKETS_CACHE = {}
+def get_cached_bucket_info(conn_func, bucket_name):
+    if bucket_name not in CONNECTED_BUCKETS_CACHE:
+        CONNECTED_BUCKETS_CACHE[bucket_name] = conn_func().head_bucket(Bucket=bucket_name)
+    return CONNECTED_BUCKETS_CACHE[bucket_name]
+### END TEMPORARY HACK ###
+##########################
 
 _s3_sessions_cache = threading.local()
 def s3_session(profile_name=None):
@@ -65,7 +77,14 @@ class S3Cache(TileCacheBase):
         self.use_http_get = use_http_get
 
         try:
-            self.bucket = self.conn().head_bucket(Bucket=bucket_name)
+            ############################
+            ### START TEMPORARY HACK ###
+            # Old code (without global cache)
+            # self.bucket = self.conn().head_bucket(Bucket=bucket_name)
+            # New code (with global cache)
+            self.bucket = get_cached_bucket_info(self.conn, bucket_name)
+            ### END TEMPORARY HACK ###
+            ##########################
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == '404':
                 raise S3ConnectionError('No such bucket: %s' % bucket_name)
