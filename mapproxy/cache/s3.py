@@ -45,7 +45,9 @@ log = logging.getLogger('mapproxy.cache.s3')
 CONNECTED_BUCKETS_CACHE = {}
 def get_cached_bucket_info(conn_func, bucket_name):
     if bucket_name not in CONNECTED_BUCKETS_CACHE:
+        log.debug(f"Fetching bucket info for {bucket_name}")
         CONNECTED_BUCKETS_CACHE[bucket_name] = conn_func().head_bucket(Bucket=bucket_name)
+        log.debug(f"Finished fetching bucket info for {bucket_name}")
     return CONNECTED_BUCKETS_CACHE[bucket_name]
 ### END TEMPORARY HACK ###
 ##########################
