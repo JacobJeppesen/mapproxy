@@ -16,9 +16,6 @@
 """
 WMS clients for maps and information.
 """
-import sys
-
-from mapproxy.compat import text_type
 from mapproxy.request.base import split_mime_type
 from mapproxy.layer import InfoQuery
 from mapproxy.source import SourceError
@@ -30,6 +27,7 @@ from mapproxy.featureinfo import create_featureinfo_doc
 
 import logging
 log = logging.getLogger('mapproxy.source.wms')
+
 
 class WMSClient(object):
     def __init__(self, request_template, http_client=None,
@@ -46,7 +44,7 @@ class WMSClient(object):
             request_method = 'POST'
         elif self.http_method == 'GET':
             request_method = 'GET'
-        else: # 'AUTO'
+        else:  # 'AUTO'
             if 'sld_body' in self.request_template.params:
                 request_method = 'POST'
             else:
@@ -54,7 +52,7 @@ class WMSClient(object):
 
         if request_method == 'POST':
             url, data = self._query_data(query, format)
-            if isinstance(data, text_type):
+            if isinstance(data, str):
                 data = data.encode('utf-8')
         else:
             url = self._query_url(query, format)
@@ -72,9 +70,9 @@ class WMSClient(object):
         if not resp.headers.get('Content-type', 'image/').startswith('image/'):
             # log response depending on content-type
             if resp.headers['Content-type'].startswith(('text/', 'application/vnd.ogc')):
-                log_size = 8000 # larger xml exception
+                log_size = 8000  # larger xml exception
             else:
-                log_size = 100 # image?
+                log_size = 100  # image?
             data = resp.read(log_size+1)
 
             truncated = ''
@@ -82,10 +80,7 @@ class WMSClient(object):
                 data = data[:-1]
                 truncated = ' [output truncated]'
 
-            if sys.version_info >= (3, 5, 0):
-                data = data.decode('utf-8', 'backslashreplace')
-            else:
-                data = data.decode('ascii', 'ignore')
+            data = data.decode('utf-8', 'backslashreplace')
 
             log.warning("no image returned from source WMS: {}, response was: '{}'{}".format(url, data, truncated))
             raise SourceError('no image returned from source WMS: %s' % (url, ))
@@ -118,7 +113,7 @@ class WMSClient(object):
         new_req.params.layers = new_req.params.layers + other.request_template.params.layers
 
         return WMSClient(new_req, http_client=self.http_client,
-                http_method=self.http_method, fwd_req_params=self.fwd_req_params)
+                         http_method=self.http_method, fwd_req_params=self.fwd_req_params)
 
 
 class WMSInfoClient(object):
@@ -184,13 +179,14 @@ class WMSInfoClient(object):
         if query.feature_count:
             req.params['feature_count'] = query.feature_count
         req.params['query_layers'] = req.params['layers']
-        if not 'info_format' in req.params and query.info_format:
+        if 'info_format' not in req.params and query.info_format:
             req.params['info_format'] = query.info_format
         if not req.params.format:
             req.params.format = query.format or 'image/png'
         req.params.srs = query.srs.srs_code
 
         return req.complete_url
+
 
 class WMSLegendClient(object):
     def __init__(self, request_template, http_client=None):
@@ -233,6 +229,7 @@ class WMSLegendClient(object):
     def identifier(self):
         return (self.request_template.url, self.request_template.params.layer)
 
+
 class WMSLegendURLClient(object):
     def __init__(self, static_url, http_client=None):
         self.url = static_url
@@ -251,4 +248,3 @@ class WMSLegendURLClient(object):
     @property
     def identifier(self):
         return (self.url, None)
-

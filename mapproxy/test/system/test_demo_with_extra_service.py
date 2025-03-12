@@ -15,8 +15,11 @@
 
 import pytest
 
-from mapproxy.service.demo import extra_demo_server_handlers, extra_substitution_handlers, register_extra_demo_server_handler, register_extra_demo_substitution_handler
+from mapproxy.service.demo import (
+    extra_demo_server_handlers, extra_substitution_handlers, register_extra_demo_server_handler,
+    register_extra_demo_substitution_handler)
 from mapproxy.test.system import SysTest
+
 
 def demo_server_handler(demo_server, req):
     if 'my_service' in req.args:
@@ -26,6 +29,7 @@ def demo_server_handler(demo_server, req):
 
 def demo_substitution_handler(demo_server, req, substitutions):
     substitutions['extra_services_html_beginning'] += '<h2>My extra service</h2>'
+
 
 @pytest.fixture(scope="module")
 def config_file():
@@ -41,8 +45,8 @@ class TestDemoWithExtraService(SysTest):
     def test_basic(self, app):
         resp = app.get("/demo/", status=200)
         assert resp.content_type == "text/html"
-        assert 'href="../service?REQUEST=GetCapabilities"' in resp
-        assert 'href="../service?REQUEST=GetCapabilities&tiled=true"' in resp
+        assert 'href="../service?REQUEST=GetCapabilities&SERVICE=WMS"' in resp
+        assert 'href="../service?REQUEST=GetCapabilities&SERVICE=WMS&tiled=true"' in resp
         assert 'href="../demo/?wmts_layer=wms_cache&format=jpeg&srs=EPSG%3A900913"' in resp
         assert 'href="../demo/?tms_layer=wms_cache&format=jpeg&srs=EPSG%3A900913"' in resp
         assert '<h2>My extra service</h2>' in resp

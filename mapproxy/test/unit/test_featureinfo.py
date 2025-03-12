@@ -15,9 +15,7 @@
 # limitations under the License.
 
 import os
-import sys
 import tempfile
-import pytest
 
 from lxml import etree, html
 
@@ -98,7 +96,6 @@ class TestXMLFeatureInfoDocs(object):
         doc = XMLFeatureInfoDoc("<root>hello</root>")
         assert doc.as_etree().getroot().text == "hello"
 
-    @pytest.mark.skipif(sys.version_info < (3, 0), reason="test skipped for python 2")
     def test_umlauts(self):
         doc = XMLFeatureInfoDoc('<root>öäüß</root>')
         assert doc.as_etree().getroot().text == 'öäüß'
@@ -238,10 +235,32 @@ class TestCombineDocs(object):
             JSONFeatureInfoDoc("{}"),
             JSONFeatureInfoDoc('{"results": [{"foo": 1}]}'),
             JSONFeatureInfoDoc('{"results": [{"bar": 2}]}'),
+            JSONFeatureInfoDoc("{}"),
         ]
         result, infotype = combine_docs(docs, None)
 
         assert """{"results": [{"foo": 1}, {"bar": 2}]}""" == result
+        assert infotype == "json"
+
+    def test_combine_json_with_null_response(self):
+        docs = [
+            JSONFeatureInfoDoc("null"),
+            JSONFeatureInfoDoc('{"results": [{"foo": 1}]}'),
+            JSONFeatureInfoDoc("null"),
+        ]
+        result, infotype = combine_docs(docs, None)
+
+        assert """{"results": [{"foo": 1}]}""" == result
+        assert infotype == "json"
+
+    def test_combine_json_with_only_empty_responses(self):
+        docs = [
+            JSONFeatureInfoDoc("{}"),
+            JSONFeatureInfoDoc("{}"),
+        ]
+        result, infotype = combine_docs(docs, None)
+
+        assert """{}""" == result
         assert infotype == "json"
 
     def test_combine_xml(self):

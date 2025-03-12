@@ -19,12 +19,12 @@ import hashlib
 import os
 import shutil
 import struct
+from io import BytesIO
 
 from mapproxy.image import ImageSource
 from mapproxy.cache.base import TileCacheBase, tile_buffer
 from mapproxy.util.fs import ensure_directory, write_atomic
 from mapproxy.util.lock import FileLock
-from mapproxy.compat import BytesIO
 
 import logging
 log = logging.getLogger(__name__)
@@ -34,11 +34,14 @@ class CompactCacheBase(TileCacheBase):
     supports_timestamp = False
     bundle_class = None
 
-    def __init__(self, cache_dir, coverage=None):
+    def __init__(self, cache_dir, coverage=None,
+                 directory_permissions=None, file_permissions=None):
         super(CompactCacheBase, self).__init__(coverage)
         md5 = hashlib.new('md5', cache_dir.encode('utf-8'), usedforsecurity=False)
         self.lock_cache_id = 'compactcache-' + md5.hexdigest()
         self.cache_dir = cache_dir
+        self.directory_permissions = directory_permissions
+        self.file_permissions = file_permissions
 
     def _get_bundle_fname_and_offset(self, tile_coord):
         x, y, z = tile_coord
@@ -53,7 +56,8 @@ class CompactCacheBase(TileCacheBase):
 
     def _get_bundle(self, tile_coord):
         bundle_fname, offset = self._get_bundle_fname_and_offset(tile_coord)
-        return self.bundle_class(bundle_fname, offset=offset)
+        return self.bundle_class(bundle_fname, offset=offset, file_permissions=self.file_permissions,
+                                 directory_permissions=self.directory_permissions)
 
     def is_cached(self, tile, dimensions=None):
         if tile.coord is None:
@@ -88,7 +92,6 @@ class CompactCacheBase(TileCacheBase):
             if not self.store_tile(tile, dimensions=dimensions):
                 failed = True
         return not failed
-
 
     def load_tile(self, tile, with_metadata=False, dimensions=None):
         if tile.source or tile.coord is None:
@@ -126,21 +129,25 @@ class CompactCacheBase(TileCacheBase):
         if self.load_tile(tile, dimensions=dimensions):
             tile.timestamp = -1
 
-    def remove_level_tiles_before(self, level, timestamp):
-        if timestamp == 0:
+    def remove_level_tiles_before(self, level, timestamp=None, remove_all=False):
+        if remove_all:
             level_dir = os.path.join(self.cache_dir, 'L%02d' % level)
             shutil.rmtree(level_dir, ignore_errors=True)
             return True
         return False
 
+
 BUNDLE_EXT = '.bundle'
 BUNDLEX_V1_EXT = '.bundlx'
 
+
 class BundleV1(object):
-    def __init__(self, base_filename, offset):
+    def __init__(self, base_filename, offset, file_permissions=None, directory_permissions=None):
         self.base_filename = base_filename
         self.lock_filename = base_filename + '.lck'
         self.offset = offset
+        self.file_permissions = file_permissions
+        self.directory_permissions = directory_permissions
 
     def _rel_tile_coord(self, tile_coord):
         return (
@@ -149,10 +156,11 @@ class BundleV1(object):
         )
 
     def data(self):
-        return BundleDataV1(self.base_filename + BUNDLE_EXT, self.offset)
+        return BundleDataV1(self.base_filename + BUNDLE_EXT, self.offset,
+                            self.directory_permissions, self.file_permissions)
 
     def index(self):
-        return BundleIndexV1(self.base_filename + BUNDLEX_V1_EXT)
+        return BundleIndexV1(self.base_filename + BUNDLEX_V1_EXT, self.directory_permissions, self.file_permissions)
 
     def is_cached(self, tile, dimensions=None):
         if tile.source or tile.coord is None:
@@ -184,7 +192,8 @@ class BundleV1(object):
                 data = buf.read()
             tiles_data.append((t.coord, data))
 
-        with FileLock(self.lock_filename):
+        with FileLock(self.lock_filename, directory_permissions=self.directory_permissions,
+                      file_permissions=self.file_permissions, remove_on_unlock=True):
             with self.data().readwrite() as bundle:
                 with self.index().readwrite() as idx:
                     for tile_coord, data in tiles_data:
@@ -194,7 +203,6 @@ class BundleV1(object):
                         idx.update_tile_offset(x, y, offset=offset, size=size)
 
         return True
-
 
     def load_tile(self, tile, with_metadata=False, dimensions=None):
         if tile.source or tile.coord is None:
@@ -229,7 +237,8 @@ class BundleV1(object):
         if tile.coord is None:
             return True
 
-        with FileLock(self.lock_filename):
+        with FileLock(self.lock_filename, directory_permissions=self.directory_permissions,
+                      file_permissions=self.file_permissions, remove_on_unlock=True):
             with self.index().readwrite() as idx:
                 x, y = self._rel_tile_coord(tile.coord)
                 idx.remove_tile_offset(x, y)
@@ -267,10 +276,13 @@ BUNDLEX_V1_FOOTER = b'\x00\x00\x00\x00\x10\x00\x00\x00\x10\x00\x00\x00\x00\x00\x
 
 INT64LE = struct.Struct('<Q')
 
+
 class BundleIndexV1(object):
-    def __init__(self, filename):
+    def __init__(self, filename, directory_permissions=None, file_permissions=None):
         self.filename = filename
         self._fh = None
+        self.directory_permissions = directory_permissions
+        self.file_permissions = file_permissions
         # defer initialization to update/remove calls to avoid
         # index creation on is_cached (prevents new files in read-only caches)
         self._initialized = False
@@ -279,7 +291,7 @@ class BundleIndexV1(object):
         self._initialized = True
         if os.path.exists(self.filename):
             return
-        ensure_directory(self.filename)
+        ensure_directory(self.filename, self.directory_permissions)
         buf = BytesIO()
         buf.write(BUNDLEX_V1_HEADER)
 
@@ -287,6 +299,10 @@ class BundleIndexV1(object):
             buf.write(INT64LE.pack((i*4)+BUNDLE_V1_HEADER_SIZE)[:5])
         buf.write(BUNDLEX_V1_FOOTER)
         write_atomic(self.filename, buf.getvalue())
+        if self.file_permissions:
+            permission = int(self.file_permissions, base=8)
+            log.info("setting file permissions on compact cache file: " + self.file_permissions)
+            os.chmod(self.filename, permission)
 
     def _tile_index_offset(self, x, y):
         return BUNDLEX_V1_HEADER_SIZE + (x * BUNDLEX_V1_GRID_HEIGHT + y) * 5
@@ -331,63 +347,74 @@ class BundleIndexV1(object):
     @contextlib.contextmanager
     def readwrite(self):
         self._init_index()
+        set_permissions = self.file_permissions and not os.path.exists(self.filename)
         with open(self.filename, 'r+b') as fh:
+            if set_permissions:
+                permission = int(self.file_permissions, base=8)
+                log.info("setting file permissions on compact cache file: " + self.file_permissions)
+                os.chmod(self.filename, permission)
             b = BundleIndexV1(self.filename)
             b._fh = fh
             yield b
 
+# The bundle file has a header with 15 little-endian long values (60 bytes).
+# NOTE: the fixed values might be some flags for image options (format, aliasing)
+# all files available for testing had the same values however.
 
 
-    # The bundle file has a header with 15 little-endian long values (60 bytes).
-    # NOTE: the fixed values might be some flags for image options (format, aliasing)
-    # all files available for testing had the same values however.
 BUNDLE_V1_HEADER_SIZE = 60
 BUNDLE_V1_HEADER = [
-    3        , # 0,  fixed
-    16384    , # 1,  max. num of tiles 128*128 = 16384
-    16       , # 2,  size of largest tile
-    5        , # 3,  fixed
-    0        , # 4,  num of tiles in bundle (*4)
-    60+65536 , # 5,  bundle size
-    40       , # 6   fixed
-    16       , # 7,  fixed
-    0        , # 8,  y0
-    127      , # 9,  y1
-    0        , # 10, x0
-    127      , # 11, x1
+    3,  # 0,  fixed
+    16384,  # 1,  max. num of tiles 128*128 = 16384
+    16,  # 2,  size of largest tile
+    5,  # 3,  fixed
+    0,  # 4,  num of tiles in bundle (*4)
+    60+65536,  # 5,  bundle size
+    40,  # 6   fixed
+    16,  # 7,  fixed
+    0,  # 8,  y0
+    127,  # 9,  y1
+    0,  # 10, x0
+    127,  # 11, x1
 ]
 BUNDLE_V1_HEADER_STRUCT_FORMAT = '<4I3Q5I'
 
+
 class BundleDataV1(object):
-    def __init__(self, filename, tile_offsets):
+    def __init__(self, filename, tile_offsets, directory_permissions=None, file_permissions=None):
         self.filename = filename
         self.tile_offsets = tile_offsets
         self._fh = None
+        self.directory_permissions = directory_permissions
+        self.file_permissions = file_permissions
         if not os.path.exists(self.filename):
             self._init_bundle()
 
     def _init_bundle(self):
-        ensure_directory(self.filename)
+        ensure_directory(self.filename, self.directory_permissions)
         header = list(BUNDLE_V1_HEADER)
         header[10], header[8] = self.tile_offsets
         header[11], header[9] = header[10]+127, header[8]+127
         write_atomic(self.filename,
-            struct.pack(BUNDLE_V1_HEADER_STRUCT_FORMAT, *header) +
-            # zero-size entry for each tile
-            (b'\x00' * (BUNDLEX_V1_GRID_HEIGHT * BUNDLEX_V1_GRID_WIDTH * 4)))
-
+                     struct.pack(BUNDLE_V1_HEADER_STRUCT_FORMAT, *header) +
+                     # zero-size entry for each tile
+                     (b'\x00' * (BUNDLEX_V1_GRID_HEIGHT * BUNDLEX_V1_GRID_WIDTH * 4)))
+        if self.file_permissions:
+            permission = int(self.file_permissions, base=8)
+            log.info("setting file permissions on compact cache file: " + self.file_permissions)
+            os.chmod(self.filename, permission)
 
     @contextlib.contextmanager
     def readonly(self):
         with open(self.filename, 'rb') as fh:
-            b = BundleDataV1(self.filename, self.tile_offsets)
+            b = BundleDataV1(self.filename, self.tile_offsets, self.directory_permissions, self.file_permissions)
             b._fh = fh
             yield b
 
     @contextlib.contextmanager
     def readwrite(self):
         with open(self.filename, 'r+b') as fh:
-            b = BundleDataV1(self.filename, self.tile_offsets)
+            b = BundleDataV1(self.filename, self.tile_offsets, self.directory_permissions, self.file_permissions)
             b._fh = fh
             yield b
 
@@ -420,7 +447,7 @@ class BundleDataV1(object):
         self._fh.seek(0, os.SEEK_END)
         offset = self._fh.tell()
         if offset == 0:
-            self._fh.write(b'\x00' * 16) # header
+            self._fh.write(b'\x00' * 16)  # header
             offset = 16
         self._fh.write(struct.pack('<L', size))
         self._fh.write(data)
@@ -463,10 +490,12 @@ BUNDLE_V2_HEADER_SIZE = 64
 
 
 class BundleV2(object):
-    def __init__(self, base_filename, offset=None):
+    def __init__(self, base_filename, offset=None, file_permissions=None, directory_permissions=None):
         # offset not used by V2
         self.filename = base_filename + '.bundle'
         self.lock_filename = base_filename + '.lck'
+        self.file_permissions = file_permissions
+        self.directory_permissions = directory_permissions
 
         # defer initialization to update/remove calls to avoid
         # index creation on is_cached (prevents new files in read-only caches)
@@ -476,12 +505,16 @@ class BundleV2(object):
         self._initialized = True
         if os.path.exists(self.filename):
             return
-        ensure_directory(self.filename)
+        ensure_directory(self.filename, self.directory_permissions)
         buf = BytesIO()
         buf.write(struct.pack(BUNDLE_V2_HEADER_STRUCT_FORMAT, *BUNDLE_V2_HEADER))
         # Empty index (ArcGIS stores an offset of 4 and size of 0 for missing tiles)
         buf.write(struct.pack('<%dQ' % BUNDLE_V2_TILES, *(4, ) * BUNDLE_V2_TILES))
         write_atomic(self.filename, buf.getvalue())
+        if self.file_permissions:
+            permission = int(self.file_permissions, base=8)
+            log.info("setting file permissions on compact cache file: " + self.file_permissions)
+            os.chmod(self.filename, permission)
 
     def _tile_idx_offset(self, x, y):
         return BUNDLE_V2_HEADER_SIZE + (x + BUNDLE_V2_GRID_HEIGHT * y) * 8
@@ -604,20 +637,21 @@ class BundleV2(object):
                 data = buf.read()
             tiles_data.append((t.coord, data))
 
-        with FileLock(self.lock_filename):
+        with FileLock(self.lock_filename, directory_permissions=self.directory_permissions,
+                      file_permissions=self.file_permissions, remove_on_unlock=True):
             with self._readwrite() as fh:
                 for tile_coord, data in tiles_data:
                     self._store_tile(fh, tile_coord, data, dimensions=dimensions)
 
         return True
 
-
     def remove_tile(self, tile, dimensions=None):
         if tile.coord is None:
             return True
 
         self._init_index()
-        with FileLock(self.lock_filename):
+        with FileLock(self.lock_filename, directory_permissions=self.directory_permissions,
+                      file_permissions=self.file_permissions, remove_on_unlock=True):
             with self._readwrite() as fh:
                 x, y = self._rel_tile_coord(tile.coord)
                 self._update_tile_offset(fh, x, y, 0, 0)
@@ -657,10 +691,9 @@ class BundleV2(object):
             yield fh
 
 
-
 class CompactCacheV1(CompactCacheBase):
     bundle_class = BundleV1
 
+
 class CompactCacheV2(CompactCacheBase):
     bundle_class = BundleV2
-

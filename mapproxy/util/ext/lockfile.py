@@ -62,9 +62,11 @@ import os
 # import logging
 # logger = logging.getLogger("zc.lockfile")
 
+
 class LockError(Exception):
     """Couldn't get a lock
     """
+
 
 try:
     import fcntl
@@ -74,6 +76,7 @@ except ImportError:
     except ImportError:
         def _lock_file(file):
             raise TypeError('No file-locking support on this platform')
+
         def _unlock_file(file):
             raise TypeError('No file-locking support on this platform')
 
@@ -103,7 +106,6 @@ else:
         except (IOError, OSError) as err:
             raise LockError("Couldn't lock {0}, error: {1}".format(file.name, err))
 
-
     def _unlock_file(file):
         # File is automatically unlocked on close
         pass
@@ -113,9 +115,17 @@ class LockFile:
 
     _fp = None
 
-    def __init__(self, path):
+    def __init__(self, path, file_permissions):
         self._path = path
-        fp = open(path, 'w+')
+        set_permissions = file_permissions and not os.path.exists(path)
+        try:
+            fp = open(path, 'w+')
+        except IOError:
+            raise Exception('Could not create Lock-file, wrong permissions on lock directory?')
+
+        if set_permissions:
+            permission = int(file_permissions, base=8)
+            os.chmod(path, permission)
 
         try:
             _lock_file(fp)

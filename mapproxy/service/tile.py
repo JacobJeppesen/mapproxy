@@ -15,11 +15,11 @@
 # limitations under the License.
 
 from __future__ import division
+from mapproxy.template import template_loader, bunch
 
 import math
 import time
 
-from mapproxy.compat import iteritems, itervalues
 from mapproxy.response import Response
 from mapproxy.exception import RequestError
 from mapproxy.service.base import Server
@@ -38,8 +38,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-from mapproxy.template import template_loader, bunch
-get_template = template_loader(__name__, 'templates')
+get_template = template_loader(__package__, 'templates')
+
 
 class TileServer(Server):
     """
@@ -75,10 +75,11 @@ class TileServer(Server):
 
         def decorate_img(image):
             query_extent = (layer.grid.srs.srs_code,
-                layer.tile_bbox(tile_request, use_profiles=tile_request.use_profiles))
+                            layer.tile_bbox(tile_request, use_profiles=tile_request.use_profiles))
             return self.decorate_img(image, 'tms', [layer.name], tile_request.http.environ, query_extent)
 
-        tile = layer.render(tile_request, use_profiles=tile_request.use_profiles, coverage=limit_to, decorate_img=decorate_img)
+        tile = layer.render(tile_request, use_profiles=tile_request.use_profiles,
+                            coverage=limit_to, decorate_img=decorate_img)
 
         tile_format = getattr(tile, 'format', tile_request.format)
         resp = Response(tile.as_buffer(), content_type='image/' + tile_format)
@@ -122,17 +123,17 @@ class TileServer(Server):
         if 'mapproxy.authorize' in request.http.environ:
             if request.tile:
                 query_extent = (tile_layer.grid.srs.srs_code,
-                    tile_layer.tile_bbox(request, use_profiles=request.use_profiles))
+                                tile_layer.tile_bbox(request, use_profiles=request.use_profiles))
             else:
-                query_extent = None # for layer capabilities
+                query_extent = None  # for layer capabilities
             result = request.http.environ['mapproxy.authorize']('tms', [tile_layer.name],
-                query_extent=query_extent, environ=request.http.environ)
+                                                                query_extent=query_extent, environ=request.http.environ)
             if result['authorized'] == 'unauthenticated':
                 raise RequestError('unauthorized', status=401)
             if result['authorized'] == 'full':
                 return
             if result['authorized'] == 'partial':
-                if result['layers'].get(tile_layer.name, {}).get('tile', False) == True:
+                if result['layers'].get(tile_layer.name, {}).get('tile', False) is True:
                     limited_to = result['layers'][tile_layer.name].get('limited_to')
                     if not limited_to:
                         limited_to = result.get('limited_to')
@@ -144,8 +145,8 @@ class TileServer(Server):
 
     def authorized_tile_layers(self, env):
         if 'mapproxy.authorize' in env:
-            result = env['mapproxy.authorize']('tms', [l for l in self.layers],
-                query_extent=None, environ=env)
+            result = env['mapproxy.authorize']('tms', [x for x in self.layers],
+                                               query_extent=None, environ=env)
             if result['authorized'] == 'unauthenticated':
                 raise RequestError('unauthorized', status=401)
             if result['authorized'] == 'full':
@@ -153,8 +154,8 @@ class TileServer(Server):
             if result['authorized'] == 'none':
                 raise RequestError('forbidden', status=403)
             allowed_layers = odict()
-            for layer in itervalues(self.layers):
-                if result['layers'].get(layer.name, {}).get('tile', False) == True:
+            for layer in self.layers.values():
+                if result['layers'].get(layer.name, {}).get('tile', False) is True:
                     allowed_layers[layer.name] = layer
             return allowed_layers
         else:
@@ -201,8 +202,9 @@ class TileServer(Server):
         template = get_template(self.root_resource_template_file)
         return template.substitute(service=bunch(default='', **service))
 
+
 class TileLayer(object):
-    def __init__(self, name, title, md, tile_manager, info_sources=[], dimensions=None):
+    def __init__(self, name, title, md, tile_manager, info_sources=[], dimensions=None, legend_version=None):
         """
         :param md: the layer metadata
         :param tile_manager: the layer tile manager
@@ -218,6 +220,7 @@ class TileLayer(object):
         self._empty_tile = None
         self._mixed_format = True if self.md.get('format', False) == 'mixed' else False
         self.empty_response_as_png = True
+        self.legend_version = legend_version
 
     @property
     def bbox(self):
@@ -263,7 +266,7 @@ class TileLayer(object):
             format = self.format
         if not self._empty_tile:
             img = BlankImageSource(size=self.grid.tile_size,
-                image_opts=ImageOptions(format=format, transparent=True))
+                                   image_opts=ImageOptions(format=format, transparent=True))
             self._empty_tile = img.as_buffer().read()
         return ImageResponse(self._empty_tile, format=format, timestamp=time.time())
 
@@ -274,7 +277,7 @@ class TileLayer(object):
     def checked_dimensions(self, tile_request):
         dimensions = {}
 
-        for dimension, values in iteritems(self.dimensions):
+        for dimension, values in self.dimensions.items():
             value = tile_request.dimensions.get(dimension)
             if value in values:
                 dimensions[dimension] = value
@@ -282,8 +285,8 @@ class TileLayer(object):
                 dimensions[dimension] = values.default
             else:
                 raise RequestError('invalid dimension value (%s=%s).'
-                    % (dimension, value), request=tile_request,
-                       code='InvalidParameterValue')
+                                   % (dimension, value), request=tile_request,
+                                   code='InvalidParameterValue')
         return dimensions
 
     def render(self, tile_request, use_profiles=False, coverage=None, decorate_img=None):
@@ -309,7 +312,7 @@ class TileLayer(object):
         try:
             with self.tile_manager.session():
                 tile = self.tile_manager.load_tile_coord(tile_coord,
-                    dimensions=dimensions, with_metadata=True)
+                                                         dimensions=dimensions, with_metadata=True)
             if tile.source is None:
                 return self.empty_response()
 
@@ -336,7 +339,7 @@ class TileLayer(object):
         except SourceError as e:
             raise RequestError(e.args[0], request=tile_request, internal=True)
 
-    def get_info(self, info_request):
+    def get_info(self, info_request, coverage=None, decorate_img=None):
         if info_request.format != self.format:
             raise RequestError('invalid format (%s). this tile set only supports (%s)'
                                % (info_request.format, self.format), request=info_request,
@@ -359,7 +362,7 @@ class TileLayer(object):
         try:
             with self.tile_manager.session():
                 tile = self.tile_manager.load_tile_coord(tile_coord,
-                    dimensions=dimensions, with_metadata=True)
+                                                         dimensions=dimensions, with_metadata=True)
             if tile.source is None:
                 return self.empty_response()
 
@@ -387,11 +390,11 @@ class TileLayer(object):
             raise RequestError(e.args[0], request=info_request, internal=True)
 
 
-
 class ImageResponse(object):
     """
     Response from an image.
     """
+
     def __init__(self, img, format, timestamp):
         self.img = img
         self.timestamp = timestamp
@@ -407,6 +410,7 @@ class TileResponse(object):
     """
     Response from a Tile.
     """
+
     def __init__(self, tile, format=None, timestamp=None, image_opts=None):
         self.tile = tile
         self.timestamp = tile.timestamp
@@ -419,24 +423,26 @@ class TileResponse(object):
         return self._buf
 
     def _format_from_magic_bytes(self):
-        #read the 2 magic bytes from the buffer
+        # read the 2 magic bytes from the buffer
         magic_bytes = self._buf.read(2)
         self._buf.seek(0)
         if magic_bytes == b'\xFF\xD8':
             return 'jpeg'
         return 'png'
 
+
 class TileServiceGrid(object):
     """
     Wraps a `TileGrid` and adds some ``TileService`` specific methods.
     """
+
     def __init__(self, grid):
         self.grid = grid
         self.profile = None
 
         if self.grid.srs == SRS(900913) and self.grid.bbox == default_bboxs[SRS((900913))]:
             self.profile = 'global-mercator'
-            self.srs_name = 'OSGEO:41001' # as required by TMS 1.0.0
+            self.srs_name = 'OSGEO:41001'  # as required by TMS 1.0.0
             self._skip_first_level = True
 
         elif self.grid.srs == SRS(4326) and self.grid.bbox == default_bboxs[SRS((4326))]:

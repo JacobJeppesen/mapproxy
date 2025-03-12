@@ -36,9 +36,9 @@ from .seeds import seeds
 from .utils import update_config, MapProxyYAMLDumper, download_capabilities
 from .geopackage import get_geopackage_configuration_dict
 
-from mapproxy.compat import iteritems
 from mapproxy.config.loader import load_configuration
 from mapproxy.util.ext.wmsparse import parse_capabilities
+
 
 def setup_logging(level=logging.INFO):
     mapproxy_log = logging.getLogger('mapproxy')
@@ -55,6 +55,7 @@ def setup_logging(level=logging.INFO):
         "[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
     ch.setFormatter(formatter)
     mapproxy_log.addHandler(ch)
+
 
 def write_header(f, capabilities):
     print('# MapProxy configuration automatically generated from:', file=f)
@@ -80,11 +81,12 @@ def file_or_stdout(name):
         with open(name, 'wb') as f:
             yield codecs.getwriter('utf-8')(f)
 
+
 def config_command(args):
     parser = optparse.OptionParser("usage: %prog autoconfig [options]")
 
     parser.add_option('--capabilities',
-        help="URL or filename of WMS 1.1.1/1.3.0 capabilities document")
+                      help="URL or filename of WMS 1.1.1/1.3.0 capabilities document")
     parser.add_option('--geopackage',
                       help="Filename of a geopackage file")
     parser.add_option('--output', help="filename for created MapProxy config [default: -]", default="-")
@@ -93,12 +95,12 @@ def config_command(args):
     parser.add_option('--base', help='base config to include in created MapProxy config')
 
     parser.add_option('--overwrite',
-        help='YAML file with overwrites for the created MapProxy config')
+                      help='YAML file with overwrites for the created MapProxy config')
     parser.add_option('--overwrite-seed',
-        help='YAML file with overwrites for the created seeding config')
+                      help='YAML file with overwrites for the created seeding config')
 
     parser.add_option('--force', default=False, action='store_true',
-        help="overwrite existing files")
+                      help="overwrite existing files")
 
     options, args = parser.parse_args(args)
 
@@ -128,7 +130,7 @@ def config_command(args):
     srs_grids = {}
     if options.base:
         base = load_configuration(options.base)
-        for name, grid_conf in iteritems(base.grids):
+        for name, grid_conf in base.grids.items():
             if name.startswith('GLOBAL_'):
                 continue
             srs_grids[grid_conf.tile_grid().srs.srs_code] = name
@@ -145,7 +147,7 @@ def config_command(args):
             cap = parse_capabilities(BytesIO(cap_doc))
         except (xml.etree.ElementTree.ParseError, ValueError) as ex:
             print(ex, file=sys.stderr)
-            print(cap_doc[:1000] + ('...' if len(cap_doc) > 1000 else ''), file=sys.stderr)
+            print(f"{cap_doc[:1000]} {'...' if len(cap_doc) > 1000 else ''}", file=sys.stderr)
             return 3
     elif gpkg:
         if os.path.isfile(gpkg):
@@ -207,7 +209,6 @@ def config_command(args):
         seed_conf['seeds'], seed_conf['cleanups'] = seeds(cap, conf['caches'])
     if overwrite_seed:
         seed_conf = update_config(seed_conf, overwrite_seed)
-
 
     if options.output:
         with file_or_stdout(options.output) as f:

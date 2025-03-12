@@ -18,14 +18,16 @@ Demo service handler
 """
 from __future__ import division
 
+try:
+    import importlib_resources
+except ImportError:
+    from importlib import resources as importlib_resources
 import os
-import pkg_resources
 import mimetypes
 from collections import defaultdict
 
 from mapproxy.config.config import base_config
 from mapproxy.util.ext.odict import odict
-from mapproxy.compat import PY2
 from mapproxy.exception import RequestError
 from mapproxy.service.base import Server
 from mapproxy.response import Response
@@ -33,17 +35,15 @@ from mapproxy.srs import SRS, get_epsg_num
 from mapproxy.layer import SRSConditional, CacheMapLayer, ResolutionConditional
 from mapproxy.source.wms import WMSSource
 
-if PY2:
-    import urllib2
-else:
-    from urllib import request as urllib2
+from urllib import request as urllib2
 
 from mapproxy.template import template_loader, bunch
 env = {'bunch': bunch}
-get_template = template_loader(__name__, 'templates', namespace=env)
+get_template = template_loader(__package__, 'templates', namespace=env)
 
 # Used by plugins
 extra_demo_server_handlers = set()
+
 
 def register_extra_demo_server_handler(handler):
     """ Method used by plugins to register a new handler for the demo service.
@@ -61,6 +61,7 @@ def register_extra_demo_server_handler(handler):
 
 extra_substitution_handlers = set()
 
+
 def register_extra_demo_substitution_handler(handler):
     """ Method used by plugins to register a new handler for doing substitutions
         to the HTML template used by the demo service.
@@ -71,7 +72,8 @@ def register_extra_demo_substitution_handler(handler):
         services.
 
         :param handler: New handler for incoming requests
-        :type handler: function that takes 3 arguments(DemoServer instance, req and a substitutions dictionary argument).
+        :type handler: function that takes 3 arguments(DemoServer instance, req and a substitutions dictionary
+            argument).
     """
 
     extra_substitution_handlers.add(handler)
@@ -81,12 +83,14 @@ def static_filename(name):
     if base_config().template_dir:
         return os.path.join(base_config().template_dir, name)
     else:
-        return pkg_resources.resource_filename(__name__, os.path.join('templates', name))
+        return importlib_resources.files(__package__).joinpath('templates').joinpath(name)
+
 
 class DemoServer(Server):
     names = ('demo',)
+
     def __init__(self, layers, md, request_parser=None, tile_layers=None,
-                 srs=None, image_formats=None, services=None, restful_template=None):
+                 srs=None, image_formats=None, services=None, restful_template=None, background=None):
         Server.__init__(self)
         self.layers = layers
         self.tile_layers = tile_layers or {}
@@ -100,6 +104,7 @@ class DemoServer(Server):
         self.srs = srs
         self.services = services or []
         self.restful_template = restful_template
+        self.background = background
 
     def handle(self, req):
         if req.path.startswith('/demo/static/'):
@@ -133,7 +138,7 @@ class DemoServer(Server):
         elif 'wmts_layer' in req.args:
             demo = self._render_wmts_template('demo/wmts_demo.html', req)
         elif 'wms_capabilities' in req.args:
-            internal_url = '%s/service?REQUEST=GetCapabilities' % (req.server_script_url)
+            internal_url = '%s/service?REQUEST=GetCapabilities&SERVICE=WMS' % (req.server_script_url)
             if 'type' in req.args and req.args['type'] == 'external':
                 url = internal_url.replace(req.server_script_url, req.script_url)
             else:
@@ -141,7 +146,7 @@ class DemoServer(Server):
             capabilities = urllib2.urlopen(url)
             demo = self._render_capabilities_template('demo/capabilities_demo.html', capabilities, 'WMS', url)
         elif 'wmsc_capabilities' in req.args:
-            internal_url = '%s/service?REQUEST=GetCapabilities&tiled=true' % (req.server_script_url)
+            internal_url = '%s/service?REQUEST=GetCapabilities&SERVICE=WMS&tiled=true' % (req.server_script_url)
             if 'type' in req.args and req.args['type'] == 'external':
                 url = internal_url.replace(req.server_script_url, req.script_url)
             else:
@@ -258,13 +263,17 @@ class DemoServer(Server):
         width = bbox[2] - bbox[0]
         height = bbox[3] - bbox[1]
         min_res = max(width/256, height/256)
+        background_url = base_config().background.url
+        if self.background:
+            background_url = self.background["url"]
         return template.substitute(layer=layer,
                                    image_formats=self.image_formats,
                                    format=escape(req.args['format']),
                                    srs=srs,
                                    layer_srs=self.layer_srs,
                                    bbox=bbox,
-                                   res=min_res)
+                                   res=min_res,
+                                   background_url=background_url)
 
     def _render_tms_template(self, template, req):
         template = get_template(template, default_inherit="demo/static.html")
@@ -288,13 +297,17 @@ class DemoServer(Server):
             add_res_to_options = True
         else:
             add_res_to_options = False
+        background_url = base_config().background.url
+        if self.background:
+            background_url = self.background["url"]
         return template.substitute(layer=tile_layer,
                                    srs=escape(req.args['srs']),
                                    format=escape(req.args['format']),
                                    resolutions=res,
                                    units=units,
                                    add_res_to_options=add_res_to_options,
-                                   all_tile_layers=self.tile_layers)
+                                   all_tile_layers=self.tile_layers,
+                                   background_url=background_url)
 
     def _render_wmts_template(self, template, req):
         template = get_template(template, default_inherit="demo/static.html")
@@ -312,6 +325,9 @@ class DemoServer(Server):
             units = 'degree'
         else:
             units = 'm'
+        background_url = base_config().background.url
+        if self.background:
+            background_url = self.background["url"]
         return template.substitute(layer=wmts_layer,
                                    matrix_set=wmts_layer.grid.name,
                                    format=escape(req.args['format']),
@@ -319,13 +335,14 @@ class DemoServer(Server):
                                    resolutions=wmts_layer.grid.resolutions,
                                    units=units,
                                    all_tile_layers=self.tile_layers,
-                                   restful_url=restful_url)
+                                   restful_url=restful_url,
+                                   background_url=background_url)
 
     def _render_capabilities_template(self, template, xmlfile, service, url):
         template = get_template(template, default_inherit="demo/static.html")
-        return template.substitute(capabilities = xmlfile,
-                                   service = service,
-                                   url = url)
+        return template.substitute(capabilities=xmlfile,
+                                   service=service,
+                                   url=url)
 
     def authorized_demo(self, environ):
         if 'mapproxy.authorize' in environ:

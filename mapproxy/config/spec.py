@@ -20,7 +20,7 @@ import datetime
 from mapproxy.util.ext.dictspec.validator import validate, ValidationError
 from mapproxy.util.ext.dictspec.spec import one_of, anything, number
 from mapproxy.util.ext.dictspec.spec import recursive, required, type_spec, combined
-from mapproxy.compat import string_type
+
 
 def validate_options(conf_dict):
     """
@@ -35,6 +35,7 @@ def validate_options(conf_dict):
         return ex.errors, ex.informal_only
     else:
         return [], True
+
 
 time_spec = {
     'seconds': number(),
@@ -109,12 +110,6 @@ source_commons = combined(
     }
 )
 
-riak_node = {
-    'host': str(),
-    'pb_port': number(),
-    'http_port': number(),
-}
-
 cache_commons = combined(
     {
         'coverage': coverage,
@@ -127,6 +122,8 @@ cache_types = {
         'use_grid_names': bool(),
         'directory': str(),
         'tile_lock_dir': str(),
+        'directory_permissions': str(),
+        'file_permissions': str(),
     }),
     'sqlite': combined(cache_commons, {
         'directory': str(),
@@ -134,12 +131,16 @@ cache_types = {
         'sqlite_wal': bool(),
         'tile_lock_dir': str(),
         'ttl': int(),
+        'directory_permissions': str(),
+        'file_permissions': str(),
     }),
     'mbtiles': combined(cache_commons, {
         'filename': str(),
         'sqlite_timeout': number(),
         'sqlite_wal': bool(),
         'tile_lock_dir': str(),
+        'directory_permissions': str(),
+        'file_permissions': str(),
     }),
     'geopackage': combined(cache_commons, {
         'filename': str(),
@@ -147,6 +148,8 @@ cache_types = {
         'tile_lock_dir': str(),
         'table_name': str(),
         'levels': bool(),
+        'directory_permissions': str(),
+        'file_permissions': str(),
     }),
     'couchdb': combined(cache_commons, {
         'url': str(),
@@ -167,17 +170,6 @@ cache_types = {
         'access_control_list': str(),
         'tile_lock_dir': str(),
         'use_http_get': bool(),
-     }),
-    'riak': combined(cache_commons, {
-        'nodes': [riak_node],
-        'protocol': one_of('pbc', 'http', 'https'),
-        'bucket': str(),
-        'default_ports': {
-            'pb': number(),
-            'http': number(),
-        },
-        'secondary_index': bool(),
-        'tile_lock_dir': str(),
     }),
     'redis': combined(cache_commons, {
         'host': str(),
@@ -195,6 +187,8 @@ cache_types = {
         'directory': str(),
         required('version'): number(),
         'tile_lock_dir': str(),
+        'directory_permissions': str(),
+        'file_permissions': str(),
     }),
     'azureblob': combined(cache_commons, {
         'connection_string': str(),
@@ -212,7 +206,6 @@ on_error = {
         'authorize_stale': bool
     }
 }
-
 
 
 inspire_md = {
@@ -236,7 +229,7 @@ inspire_md = {
             'date_of_last_revision': one_of(str, datetime.date),
         },
         required('conformities'): [{
-            'title': string_type,
+            'title': str,
             'uris': [str],
             'date_of_publication': one_of(str, datetime.date),
             'date_of_creation': one_of(str, datetime.date),
@@ -248,12 +241,12 @@ inspire_md = {
             required('degree'): str,
         }],
         required('metadata_points_of_contact'): [{
-            'organisation_name': string_type,
+            'organisation_name': str,
             'email': str,
         }],
         required('mandatory_keywords'): [str],
         'keywords': [{
-            required('title'): string_type,
+            required('title'): str,
             'date_of_publication': one_of(str, datetime.date),
             'date_of_creation': one_of(str, datetime.date),
             'date_of_last_revision': one_of(str, datetime.date),
@@ -262,7 +255,7 @@ inspire_md = {
                 required('url'): str,
                 required('media_type'): str,
             }],
-            required('keyword_value'): string_type,
+            required('keyword_value'): str,
         }],
         required('metadata_date'): one_of(str, datetime.date),
         'metadata_url': {
@@ -276,28 +269,28 @@ inspire_md = {
 }
 
 wms_130_layer_md = {
-    'abstract': string_type,
+    'abstract': str,
     'keyword_list': [
         {
-            'vocabulary': string_type,
-            'keywords': [string_type],
+            'vocabulary': str,
+            'keywords': [str],
         }
     ],
     'attribution': {
-        'title': string_type,
+        'title': str,
         'url':    str,
         'logo': {
             'url':    str,
             'width':  int,
             'height': int,
-            'format': string_type,
-       }
+            'format': str,
+        }
     },
     'identifier': [
         {
             'url': str,
-            'name': string_type,
-            'value': string_type,
+            'name': str,
+            'value': str,
         }
     ],
     'metadata': [
@@ -342,16 +335,16 @@ grid_opts = {
 }
 
 ogc_service_md = {
-    'title': string_type,
-    'abstract': string_type,
-    'online_resource': string_type,
+    'title': str,
+    'abstract': str,
+    'online_resource': str,
     'contact': anything(),
-    'fees': string_type,
-    'access_constraints': string_type,
+    'fees': str,
+    'access_constraints': str,
     'keyword_list': [
         {
-            'vocabulary': string_type,
-            'keywords': [string_type],
+            'vocabulary': str,
+            'keywords': [str],
         }
     ],
 }
@@ -371,7 +364,7 @@ band_sources = {
 }
 
 mapproxy_yaml_spec = {
-    '__config_files__': anything(), # only used internaly
+    '__config_files__': anything(),  # only used internaly
     'globals': {
         'image': {
             'resampling_method': 'method',
@@ -395,6 +388,8 @@ mapproxy_yaml_spec = {
             'base_dir': str(),
             'lock_dir': str(),
             'tile_lock_dir': str(),
+            'directory_permissions': str(),
+            'file_permissions': str(),
             'meta_size': [number()],
             'meta_buffer': number(),
             'bulk_meta_tiles': bool(),
@@ -417,10 +412,10 @@ mapproxy_yaml_spec = {
             'tile_size': [int()],
         },
         'srs': {
-          'axis_order_ne': [str()],
-          'axis_order_en': [str()],
-          'proj_data_dir': str(),
-          'preferred_src_proj': {anything(): [str()]},
+            'axis_order_ne': [str()],
+            'axis_order_en': [str()],
+            'proj_data_dir': str(),
+            'preferred_src_proj': {anything(): [str()]},
         },
         'tiles': {
             'expires_hours': number(),
@@ -435,7 +430,7 @@ mapproxy_yaml_spec = {
     },
     'caches': {
         anything(): {
-            required('sources'): one_of([string_type], band_sources),
+            required('sources'): one_of([str], band_sources),
             'name': str(),
             'grids': [str()],
             'cache_dir': str(),
@@ -456,7 +451,7 @@ mapproxy_yaml_spec = {
             'downscale_tiles': int(),
             'refresh_before': time_spec,
             'watermark': {
-                'text': string_type,
+                'text': str,
                 'font_size': number(),
                 'color': one_of(str(), [number()]),
                 'opacity': number(),
@@ -492,7 +487,7 @@ mapproxy_yaml_spec = {
             'bbox_srs': [one_of(str(), {'bbox': [number()], 'srs': str()})],
             'image_formats': [str()],
             'attribution': {
-                'text': string_type,
+                'text': str,
             },
             'featureinfo_types': [str()],
             'featureinfo_xslt': {
@@ -521,7 +516,7 @@ mapproxy_yaml_spec = {
                     'featureinfo_out_format': str(),
                 },
                 'image': combined(image_opts, {
-                    'opacity':number(),
+                    'opacity': number(),
                     'transparent_color': one_of(str(), [number()]),
                     'transparent_color_tolerance': number(),
                 }),
@@ -536,28 +531,28 @@ mapproxy_yaml_spec = {
                 }
             }),
             'mapserver': combined(source_commons, {
-                    'wms_opts': {
-                        'version': str(),
-                        'map': bool(),
-                        'featureinfo': bool(),
-                        'legendgraphic': bool(),
-                        'legendurl': str(),
-                        'featureinfo_format': str(),
-                        'featureinfo_xslt': str(),
-                    },
-                    'image': combined(image_opts, {
-                        'opacity':number(),
-                        'transparent_color': one_of(str(), [number()]),
-                        'transparent_color_tolerance': number(),
-                    }),
-                    'supported_formats': [str()],
-                    'supported_srs': [str()],
-                    'forward_req_params': [str()],
-                    required('req'): {
-                        required('map'): str(),
-                        anything(): anything()
-                    },
-                    'mapserver': mapserver_opts,
+                'wms_opts': {
+                    'version': str(),
+                    'map': bool(),
+                    'featureinfo': bool(),
+                    'legendgraphic': bool(),
+                    'legendurl': str(),
+                    'featureinfo_format': str(),
+                    'featureinfo_xslt': str(),
+                },
+                'image': combined(image_opts, {
+                    'opacity': number(),
+                    'transparent_color': one_of(str(), [number()]),
+                    'transparent_color_tolerance': number(),
+                }),
+                'supported_formats': [str()],
+                'supported_srs': [str()],
+                'forward_req_params': [str()],
+                required('req'): {
+                    required('map'): str(),
+                    anything(): anything()
+                },
+                'mapserver': mapserver_opts,
             }),
             'tile': combined(source_commons, {
                 required('url'): str(),
@@ -565,7 +560,7 @@ mapproxy_yaml_spec = {
                 'image': image_opts,
                 'grid': str(),
                 'request_format': str(),
-                'origin': str(), # TODO: remove with 1.5
+                'origin': str(),  # TODO: remove with 1.5
                 'http': http_opts,
                 'on_error': on_error,
             }),
@@ -579,7 +574,7 @@ mapproxy_yaml_spec = {
                 'multithreaded': bool(),
             }),
             'arcgis': combined(source_commons, {
-               required('req'): {
+                required('req'): {
                     required('url'): str(),
                     'dpi': int(),
                     'layers': str(),
@@ -603,24 +598,26 @@ mapproxy_yaml_spec = {
     'layers': one_of(
         {
             anything(): combined(scale_hints, {
-                'sources': [string_type],
-                required('title'): string_type,
+                'sources': [str],
+                required('title'): str,
                 'legendurl': str(),
                 'md': wms_130_layer_md,
             })
         },
         recursive([combined(scale_hints, {
-            'sources': [string_type],
-            'tile_sources': [string_type],
+            'sources': [str],
+            'tile_sources': [str],
             'name': str(),
-            required('title'): string_type,
+            required('title'): str,
             'legendurl': str(),
+            'wmts_rest_legendurl': str(),
+            'wmts_kvp_legendurl': str(),
             'layers': recursive(),
             'md': wms_130_layer_md,
             'dimensions': {
                 anything(): {
-                    required('values'): [one_of(string_type, float, int)],
-                    'default': one_of(string_type, float, int),
+                    required('values'): [one_of(str, float, int)],
+                    'default': one_of(str, float, int),
                 }
             }
         })])

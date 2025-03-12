@@ -21,11 +21,6 @@ jobs:
         image: couchdb:2
         ports:
           - 5984:5984
-      riak:
-        image: basho/riak-kv
-        ports:
-          - 8087:8087
-          - 8098:8098
       azure-blob:
         image: mcr.microsoft.com/azure-storage/azurite
         ports:
@@ -33,13 +28,11 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     env:
       MAPPROXY_TEST_COUCHDB: 'http://localhost:5984'
       MAPPROXY_TEST_REDIS: '127.0.0.1:6379'
-      MAPPROXY_TEST_RIAK_HTTP: 'http://localhost:8098'
-      MAPPROXY_TEST_RIAK_PBC: 'pbc://localhost:8087'
       MAPPROXY_TEST_AZURE_BLOB: 'http://localhost:10000'
       # do not load /etc/boto.cfg with Python 3 incompatible plugin
       # https://github.com/travis-ci/travis-ci/issues/5246#issuecomment-166460882
@@ -55,12 +48,12 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Use python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Cache python deps 💾
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.OS }}-python-${{ hashFiles('**/requirements-tests.txt') }}
@@ -70,6 +63,7 @@ jobs:
 
     - name: Install dependencies ⏬
       run: |
+        pip install .
         pip install -r requirements-tests.txt
         pip freeze
 

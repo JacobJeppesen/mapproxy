@@ -24,6 +24,7 @@ import random
 import errno
 import shutil
 
+
 def swap_dir(src_dir, dst_dir, keep_old=False, backup_ext='.tmp'):
     """
     Rename `src_dir` to `dst_dir`. The `dst_dir` is first renamed to
@@ -40,6 +41,7 @@ def swap_dir(src_dir, dst_dir, keep_old=False, backup_ext='.tmp'):
     if os.path.exists(tmp_dir) and not keep_old:
         shutil.rmtree(tmp_dir)
 
+
 def _force_rename_dir(src_dir, dst_dir):
     """
     Rename `src_dir` to `dst_dir`. If `dst_dir` exists, it will be removed.
@@ -53,63 +55,85 @@ def _force_rename_dir(src_dir, dst_dir):
         except OSError as ex:
             if ex.errno == errno.ENOTEMPTY or ex.errno == errno.EEXIST:
                 if rename_tries > 0:
-                    time.sleep(2**rename_tries / 100.0) # from 10ms to 5s
+                    time.sleep(2**rename_tries / 100.0)  # from 10ms to 5s
                 rename_tries += 1
                 shutil.rmtree(dst_dir)
             else:
                 raise
         else:
-            break # on success
+            break  # on success
 
-def cleanup_directory(directory, before_timestamp, remove_empty_dirs=True,
+
+def cleanup_directory(directory, before_timestamp, remove_all=False, remove_empty_dirs=True,
                       file_handler=None):
+    if not os.path.exists(directory):
+        return
+
     if file_handler is None:
-        if before_timestamp == 0 and remove_empty_dirs == True and os.path.exists(directory):
+        if remove_all:
             shutil.rmtree(directory, ignore_errors=True)
             return
 
+        if remove_empty_dirs:
+            if remove_dir_if_empty(directory):
+                return
+
         file_handler = os.remove
 
-    if os.path.exists(directory):
-        for dirpath, dirnames, filenames in os.walk(directory, topdown=False):
-            if not filenames:
-                if (remove_empty_dirs and not os.listdir(dirpath)
+    for dirpath, dirnames, filenames in os.walk(directory, topdown=False):
+        if not filenames:
+            if (remove_empty_dirs and not os.listdir(dirpath)
                     and dirpath != directory):
-                    os.rmdir(dirpath)
-                continue
-            for filename in filenames:
-                filename = os.path.join(dirpath, filename)
-                try:
-                    if before_timestamp == 0:
-                        file_handler(filename)
-                    if os.lstat(filename).st_mtime < before_timestamp:
-                        file_handler(filename)
-                except OSError as ex:
-                    if ex.errno != errno.ENOENT: raise
-
-            if remove_empty_dirs:
-                remove_dir_if_emtpy(dirpath)
+                os.rmdir(dirpath)
+            continue
+        for filename in filenames:
+            filename = os.path.join(dirpath, filename)
+            try:
+                if remove_all or os.lstat(filename).st_mtime < before_timestamp:
+                    file_handler(filename)
+            except OSError as ex:
+                if ex.errno != errno.ENOENT:
+                    raise
 
         if remove_empty_dirs:
-            remove_dir_if_emtpy(directory)
+            remove_dir_if_empty(dirpath)
 
-def remove_dir_if_emtpy(directory):
+    if remove_empty_dirs:
+        remove_dir_if_empty(directory)
+
+
+def remove_dir_if_empty(directory):
     try:
         os.rmdir(directory)
+        return True
     except OSError as ex:
-        if ex.errno != errno.ENOENT and ex.errno != errno.ENOTEMPTY: raise
+        if ex.errno != errno.ENOENT and ex.errno != errno.ENOTEMPTY:
+            raise
+        return False
 
-def ensure_directory(file_name):
+
+def ensure_directory(file_name, directory_permissions=None):
     """
     Create directory if it does not exist, else do nothing.
     """
     dir_name = os.path.dirname(file_name)
-    if not os.path.exists(dir_name):
+    if not os.path.isdir(dir_name):
         try:
-            os.makedirs(dir_name)
+            if dir_name == '.' or dir_name == '/':
+                return
+
+            # call ensure_directory recursively
+            ensure_directory(dir_name, directory_permissions)
+
+            os.mkdir(dir_name)
+            if directory_permissions:
+                permission = int(directory_permissions, base=8)
+                os.chmod(dir_name, permission)
+
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise e
+
 
 def write_atomic(filename, data):
     """

@@ -24,6 +24,7 @@ from mapproxy.util.fs import ensure_directory, write_atomic
 import logging
 log = logging.getLogger(__name__)
 
+
 def legend_identifier(legends):
     """
     >>> legend_identifier([("http://example/?", "foo"), ("http://example/?", "bar")])
@@ -38,16 +39,20 @@ def legend_identifier(legends):
             parts.append(layer)
     return ''.join(parts)
 
+
 def legend_hash(identifier, scale):
     md5 = hashlib.md5()
     md5.update(identifier.encode('utf-8'))
     md5.update(str(scale).encode('ascii'))
     return md5.hexdigest()
 
+
 class LegendCache(object):
-    def __init__(self, cache_dir=None, file_ext='png'):
+    def __init__(self, cache_dir=None, file_ext='png', directory_permissions=None, file_permissions=None):
         self.cache_dir = cache_dir
         self.file_ext = file_ext
+        self.directory_permissions = directory_permissions
+        self.file_permissions = file_permissions
 
     def store(self, legend):
         if legend.stored:
@@ -56,12 +61,17 @@ class LegendCache(object):
         if legend.location is None:
             hash = legend_hash(legend.id, legend.scale)
             legend.location = os.path.join(self.cache_dir, hash) + '.' + self.file_ext
-            ensure_directory(legend.location)
+            ensure_directory(legend.location, self.directory_permissions)
 
         data = legend.source.as_buffer(ImageOptions(format='image/' + self.file_ext), seekable=True)
         data.seek(0)
+        set_permissions = self.file_permissions and not os.path.exists(legend.location)
         log.debug('writing to %s' % (legend.location))
         write_atomic(legend.location, data.read())
+        if set_permissions:
+            permission = int(self.file_permissions, base=8)
+            log.info("setting file permissions on compact cache file: " + self.file_permissions)
+            os.chmod(legend.location, permission)
         data.seek(0)
         legend.stored = True
 
@@ -73,6 +83,7 @@ class LegendCache(object):
             legend.source = ImageSource(legend.location)
             return True
         return False
+
 
 class Legend(object):
     def __init__(self, source=None, id=None, scale=None):

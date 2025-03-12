@@ -12,7 +12,7 @@ Configuration
 You can configure a backend for each cache with the ``cache`` option.
 Each backend has a ``type`` and one or more options.
 
-::
+.. code-block:: yaml
 
   caches:
     mycache:
@@ -25,7 +25,7 @@ Each backend has a ``type`` and one or more options.
 
 You may add a coverage definition to any cache with the ``coverage`` option under ``cache``.
 
-::
+.. code-block:: yaml
 
   caches:
     mycache:
@@ -84,6 +84,16 @@ This is the default cache type and it uses a single file for each tile. Availabl
 
   .. versionadded:: 1.6.0
 
+``image``:
+  See :ref:`image_options` for options.
+
+  .. versionadded:: 2.0.0
+
+``directory_permissions``, ``file_permissions``:
+  Permissions that MapProxy will set when creating files and directories. Must be given as string containing the octal representation of permissions. I.e. ``rwxrw-r--`` is ``'764'``. This will not work on windows OS.
+
+  .. versionadded:: 3.1.0
+
 .. _cache_mbtiles:
 
 ``mbtiles``
@@ -104,7 +114,7 @@ Available options:
 
 You can set the ``sources`` to an empty list, if you use an existing MBTiles file and do not have a source.
 
-::
+.. code-block:: yaml
 
   caches:
     mbtiles_cache:
@@ -120,6 +130,11 @@ You can set the ``sources`` to an empty list, if you use an existing MBTiles fil
   Use the ``--summary`` option of the ``mapproxy-seed`` tool.
 
 The note about ``bulk_meta_tiles`` for SQLite below applies to MBtiles as well.
+
+``directory_permissions``, ``file_permissions``:
+  Permissions that MapProxy will set when creating files and directories. Must be given as string containing the octal representation of permissions. I.e. ``rwxrw-r--`` is ``'764'``. This will not work on windows OS.
+
+  .. versionadded:: 3.1.0
 
 .. _cache_sqlite:
 
@@ -143,7 +158,7 @@ Available options:
 ``ttl``:
   The time-to-live of each tile in the cache in seconds. Use 0 (default) to allow unlimited tile reuse.
 
-::
+.. code-block:: yaml
 
   caches:
     sqlite_cache:
@@ -160,7 +175,7 @@ Available options:
 
   All tiles from a meta tile request are stored in one transaction into the SQLite file to increase performance. You need to activate the :ref:`bulk_meta_tiles <bulk_meta_tiles>` option to get the same benefit when you are using tiled sources.
 
-  ::
+  .. code-block:: yaml
 
     caches:
       sqlite_cache:
@@ -170,6 +185,11 @@ Available options:
         cache:
           type: sqlite
           directory: /path/to/cache
+
+``directory_permissions``, ``file_permissions``:
+  Permissions that MapProxy will set when creating files and directories. Must be given as string containing the octal representation of permissions. I.e. ``rwxrw-r--`` is ``'764'``. This will not work on windows OS.
+
+  .. versionadded:: 3.1.0
 
 .. _cache_couchdb:
 
@@ -243,7 +263,7 @@ Available options:
 Example
 -------
 
-::
+.. code-block:: yaml
 
   caches:
     mycouchdbcache:
@@ -264,7 +284,11 @@ Example
 
 
 
-MapProxy will place the JSON document for tile z=3, x=1, y=2 at ``http://localhost:9999/mywms_tiles/mygrid-3-1-2``. The document will look like::
+MapProxy will place the JSON document for tile z=3, x=1, y=2 at ``http://localhost:9999/mywms_tiles/mygrid-3-1-2``. The document will look like:
+
+
+.. code-block:: json
+
 
   {
       "_attachments": {
@@ -293,61 +317,14 @@ MapProxy will place the JSON document for tile z=3, x=1, y=2 at ``http://localho
 
 The ``_attachments``-part is the internal structure of CouchDB where the tile itself is stored. You can access the tile directly at: ``http://localhost:9999/mywms_tiles/mygrid-3-1-2/tile``.
 
+
 .. _cache_riak:
 
 ``riak``
 ========
 
-.. versionadded:: 1.6.0
+Support dropped after version 3.1.3 of MapProxy.
 
-Store tiles in a `Riak <http://basho.com/riak/>`_ cluster. MapProxy creates keys with binary data as value and timestamps as user defined metadata.
-This backend is good for very large caches which can be distributed over many nodes. Data can be distributed over multiple nodes providing a fault-tolernt and high-available storage. A Riak cluster is masterless and each node can handle read and write requests.
-
-Requirements
-------------
-
-You will need the `Python Riak client <https://pypi.org/project/riak>`_ version 2.4.2 or older. You can install it in the usual way, for example with ``pip install riak==2.4.2``. Environments with older version must be upgraded with ``pip install -U riak==2.4.2``. Python library depends on packages `python-dev`, `libffi-dev` and `libssl-dev`.
-
-Configuration
--------------
-
-Available options:
-
-``nodes``:
-    A list of riak nodes. Each node needs a ``host`` and optionally a ``pb_port`` and an ``http_port`` if the ports differ from the default. Defaults to single localhost node.
-
-``protocol``:
-    Communication protocol. Allowed options is ``http``, ``https`` and ``pbc``. Defaults to ``pbc``.
-
-``bucket``:
-    The name of the bucket MapProxy uses for this cache. The bucket is the namespace for the tiles and must be unique for each cache. Defaults to cache name suffixed with grid name (e.g. ``mycache_webmercator``).
-
-``default_ports``:
-    Default ``pb`` and ``http`` ports for ``pbc`` and ``http`` protocols. Will be used as the default for each defined node.
-
-``secondary_index``:
-    If ``true`` enables secondary index for tiles. This improves seed cleanup performance but requires that Riak uses LevelDB as the backend. Refer to the Riak documentation. Defaults to ``false``.
-
-Example
--------
-
-::
-
-  myriakcache:
-    sources: [mywms]
-    grids: [mygrid]
-    cache:
-      type: riak
-      nodes:
-        - host: 1.example.org
-          pb_port: 9999
-        - host: 1.example.org
-        - host: 1.example.org
-      protocol: pbc
-      bucket: myriakcachetiles
-      default_ports:
-        pb: 8087
-        http: 8098
 
 .. _cache_redis:
 
@@ -400,7 +377,7 @@ Available options:
 Example
 -------
 
-::
+.. code-block:: yaml
 
     redis_cache:
         sources: [mywms]
@@ -438,7 +415,7 @@ Available options:
 
 You can set the ``sources`` to an empty list, if you use an existing geopackage file and do not have a source.
 
-::
+.. code-block:: yaml
 
   caches:
     geopackage_cache:
@@ -504,12 +481,12 @@ Available options:
   When set to ``true``, requests to S3 ``GetObject`` will be fetched via urllib2 instead of boto, which decreases response times. Defaults to ``false``.
 
 .. note::
-  The hierarchical ``directory_layouts`` can hit limitations of S3 *"if you are routinely processing 100 or more requests per second"*. ``directory_layout: reverse_tms`` can work around this limitation. Please read `S3 Request Rate and Performance Considerations <http://docs.aws.amazon.com/AmazonS3/latest/dev/request-rate-perf-considerations.html>`_ for more information on this issue.
+  The hierarchical ``directory_layouts`` can hit limitations of AWS S3 if you are routinely processing 3500 or more requests per second. ``directory_layout: reverse_tms`` can work around this limitation. Please read `S3 Request Rate and Performance Considerations <http://docs.aws.amazon.com/AmazonS3/latest/dev/request-rate-perf-considerations.html>`_ for more information on this issue.
 
 Example
 -------
 
-::
+.. code-block:: yaml
 
   cache:
     my_layer_20110501_epsg_4326_cache_out:
@@ -528,7 +505,7 @@ Example
 Example usage with DigitalOcean Spaces
 --------------------------------------
 
-::
+.. code-block:: yaml
 
   cache:
     my_layer_20110501_epsg_4326_cache_out:
@@ -549,7 +526,7 @@ Example usage with DigitalOcean Spaces
 .. _cache_azureblob:
 
 ``azureblob``
-======
+=============
 
 .. versionadded:: to be released
 
@@ -601,7 +578,7 @@ Available options:
 Example
 -------
 
-::
+.. code-block:: yaml
 
   cache:
     my_layer_20110501_epsg_4326_cache_out:
@@ -642,13 +619,18 @@ Available options:
 ``version``:
   The version of the ArcGIS compact cache format. This option is required. Either ``1`` or ``2``.
 
+``directory_permissions``, ``file_permissions``:
+  Permissions that MapProxy will set when creating files and directories. Must be given as string containing the octal representation of permissions. I.e. ``rwxrw-r--`` is ``'764'``. This will not work on windows OS.
+
+  .. versionadded:: 3.1.0
+
 
 You can set the ``sources`` to an empty list, if you use an existing compact cache files and do not have a source.
 
 
 The following configuration will load tiles from ``/path/to/cache/L00/R0000C0000.bundle``, etc.
 
-::
+.. code-block:: yaml
 
   caches:
     compact_cache:

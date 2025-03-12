@@ -1,7 +1,7 @@
 .. _services:
 
 Services
-========
+########
 
 
 The following services are available:
@@ -13,7 +13,8 @@ The following services are available:
 - :ref:`demo_service_label`
 
 You need to add the service to the ``services`` section of your MapProxy configuration to enable it. Some services take additional options.
-::
+
+.. code-block:: yaml
 
   services:
     tms:
@@ -55,6 +56,12 @@ Adds an attribution (copyright) line to all WMS requests.
 
   ``keyword_list``
 
+.. _wms_inpire_md:
+
+``inspire_md``
+""""""""""""""
+``inspire_md`` is for inspire metadata. See :ref:`inspire`
+
 .. _wms_srs:
 
 ``srs``
@@ -75,7 +82,9 @@ The ``bbox_srs`` option controls in which SRS the BBOX is advertised in the capa
 
 You need to make sure that all layer extents are valid for these SRS. E.g. you can't choose a local SRS like UTM if you're using a global grid without limiting all sources with a ``coverage``.
 
-For example, a config with::
+For example, a config with:
+
+.. code-block:: yaml
 
   services:
     wms:
@@ -88,7 +97,9 @@ will show the bbox in the capabilities in EPSG:4326, EPSG:3857 and EPSG:31467.
 
     You can also define an explicit bbox for specific SRS. This bbox will overwrite all layer extents for that SRS.
 
-The following example will show the actual bbox of each layer in EPSG:4326 and EPSG:3857, but always the specified bbox for EPSG:31467::
+The following example will show the actual bbox of each layer in EPSG:4326 and EPSG:3857, but always the specified bbox for EPSG:31467:
+
+.. code-block:: yaml
 
   services:
     wms:
@@ -126,7 +137,7 @@ You can define XSLT scripts to transform outgoing feature information. You can d
 ``xml``
   Define a script for ``INFO_FORMAT=application/vnd.ogc.gml`` and ``INFO_FORMAT=text/xml`` requests.
 
-See :ref:`FeatureInformation for more informaiton <fi_xslt>`.
+See :ref:`FeatureInformation for more information <fi_xslt>`.
 
 ``strict``
 """"""""""
@@ -157,7 +168,8 @@ A list of WMS version numbers that MapProxy should support. Defaults to ``['1.0.
 
 Full example
 """"""""""""
-::
+
+.. code-block:: yaml
 
   services:
     wms:
@@ -230,7 +242,7 @@ Tiles will then be available under ``/tms/1.0.0/mylayer/mygrid/`` instead of ``/
 Example
 """""""
 
-::
+.. code-block:: yaml
 
   services:
     tms:
@@ -296,7 +308,7 @@ Tiles will then be available under ``/kml/mylayer/mygrid/`` instead of ``/kml/my
 Example
 """""""
 
-::
+.. code-block:: yaml
 
   services:
     kml:
@@ -331,7 +343,7 @@ The KVP service is available at ``/service`` and ``/ows``.
 
 You can enable or disable the KVP service with the ``kvp`` option. It is enabled by default and you need to enable ``restful`` if you disable this one.
 
-::
+.. code-block:: yaml
 
   services:
     wmts:
@@ -349,7 +361,7 @@ The RESTful service capabilities are available at ``/wmts/1.0.0/WMTSCapabilities
 
 You can enable or disable the RESTful service with the ``restful`` option. It is enabled by default and you need to enable ``kvp`` if you disable this one.
 
-::
+.. code-block:: yaml
 
   services:
     wmts:
@@ -368,7 +380,9 @@ The template variables are identical with the WMTS specification. ``TileMatrixSe
 
 
 You can access the tile x=3, y=9, z=4 at ``http://example.org/wmts/1.0.0/mylayer-mygrid/4-3-9/tile``
-with the following configuration::
+with the following configuration:
+
+.. code-block:: yaml
 
   services:
     wmts:
@@ -394,7 +408,9 @@ A list of feature info formats that the WMTS service should offer. Each format r
 
 No ``featureinfo_formats`` are configured by default.
 
-To enable GML and HTML feature info requests::
+To enable GML and HTML feature info requests:
+
+.. code-block:: yaml
 
   services:
     wmts:
@@ -420,6 +436,8 @@ MapProxy comes with a demo service that lists all configured WMS and TMS layers.
 The service is available at ``/demo/``.
 
 This service takes no further options::
+
+.. code-block:: yaml
 
   services:
       demo:

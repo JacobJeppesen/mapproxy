@@ -25,7 +25,6 @@ from mapproxy.cache.base import tile_buffer, TileCacheBase
 from mapproxy.util import async_
 from mapproxy.util.py import reraise_exception
 from urllib import request as urllib2
-from urllib.error import HTTPError
 
 try:
     import boto3
@@ -53,6 +52,8 @@ def get_cached_bucket_info(conn_func, bucket_name):
 ##########################
 
 _s3_sessions_cache = threading.local()
+
+
 def s3_session(profile_name=None):
     if not hasattr(_s3_sessions_cache, 'sessions'):
         _s3_sessions_cache.sessions = {}
@@ -60,8 +61,10 @@ def s3_session(profile_name=None):
         _s3_sessions_cache.sessions[profile_name] = boto3.session.Session(profile_name=profile_name)
     return _s3_sessions_cache.sessions[profile_name]
 
+
 class S3ConnectionError(Exception):
     pass
+
 
 class S3Cache(TileCacheBase):
 
@@ -105,7 +108,7 @@ class S3Cache(TileCacheBase):
         self._tile_location, _ = path.location_funcs(layout=directory_layout)
 
     def get_bucket_url(self, tile):
-        return "https://{bucket}.s3.{region}.amazonaws.com/{key}".format(bucket=self.bucket_name, region=self.region_name, key=self.tile_key(tile))
+        return f"https://{self.bucket_name}.s3.{self.region_name}.amazonaws.com/{self.tile_key(tile)}"
 
     def tile_key(self, tile):
         return self._tile_location(tile, self.base_path, self.file_ext).lstrip('/')
@@ -115,7 +118,8 @@ class S3Cache(TileCacheBase):
             raise ImportError("S3 Cache requires 'boto3' package.")
 
         try:
-            return s3_session(self.profile_name).client("s3", region_name=self.region_name, endpoint_url=self.endpoint_url)
+            return s3_session(self.profile_name).client(
+                "s3", region_name=self.region_name, endpoint_url=self.endpoint_url)
         except Exception as e:
             raise S3ConnectionError('Error during connection %s' % e)
 
@@ -174,11 +178,12 @@ class S3Cache(TileCacheBase):
                 raise
         else:
             try:
-                r  = self.conn().get_object(Bucket=self.bucket_name, Key=key)
+                r = self.conn().get_object(Bucket=self.bucket_name, Key=key)
                 self._set_metadata(r, tile)
                 tile.source = ImageSource(r['Body'])
             except botocore.exceptions.ClientError as e:
-                error = e.response.get('Errors', e.response)['Error'] # moto get_object can return Error wrapped in Errors...
+                # moto get_object can return Error wrapped in Errors...
+                error = e.response.get('Errors', e.response)['Error']
                 if error['Code'] in ('404', 'NoSuchKey'):
                     return False
                 raise
@@ -208,10 +213,11 @@ class S3Cache(TileCacheBase):
             extra_args['ACL'] = self.access_control_list
         with tile_buffer(tile) as buf:
             self.conn().upload_fileobj(
-                NopCloser(buf), # upload_fileobj closes buf, wrap in NopCloser
+                NopCloser(buf),  # upload_fileobj closes buf, wrap in NopCloser
                 self.bucket_name,
                 key,
                 ExtraArgs=extra_args)
+
 
 class NopCloser(object):
     def __init__(self, wrapped):

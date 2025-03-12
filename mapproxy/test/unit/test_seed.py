@@ -65,7 +65,7 @@ class MockSeedPool(object):
 
 class MockCache(object):
 
-    def is_cached(self, tile,dimensions=None):
+    def is_cached(self, tile, dimensions=None):
         return False
 
 
@@ -83,14 +83,14 @@ class TestSeeder(object):
         md = dict(name="", cache_name="", grid_name="")
         coverage = BBOXCoverage(bbox, srs)
         return SeedTask(
-            md, self.tile_mgr, levels, refresh_timestamp=None, coverage=coverage
+            md, self.tile_mgr, levels, refresh_timestamp=None, refresh_all=False, coverage=coverage
         )
 
     def make_geom_task(self, geom, srs, levels):
         md = dict(name="", cache_name="", grid_name="")
         coverage = GeomCoverage(geom, srs)
         return SeedTask(
-            md, self.tile_mgr, levels, refresh_timestamp=None, coverage=coverage
+            md, self.tile_mgr, levels, refresh_timestamp=None, refresh_all=False, coverage=coverage
         )
 
     def test_seed_full_bbox(self):
@@ -260,7 +260,7 @@ class TestProgressStore(object):
     def test_load_empty(self):
         store = ProgressStore("doesnotexist.no_realy.txt")
         store.load()
-        assert store.get(("foo", "bar", "baz")) == None
+        assert store.get(("foo", "bar", "baz")) is None
 
     def test_load_store(self):
         with TempFile(no_create=True) as tmp:
@@ -268,7 +268,7 @@ class TestProgressStore(object):
                 f.write(pickle.dumps({("view", "cache", "grid"): [(0, 1), (2, 4)]}))
             store = ProgressStore(tmp)
             assert store.get(("view", "cache", "grid")) == [(0, 1), (2, 4)]
-            assert store.get(("view", "cache", "grid2")) == None
+            assert store.get(("view", "cache", "grid2")) is None
             store.add(("view", "cache", "grid"), [])
             store.add(("view", "cache", "grid2"), [(0, 1)])
             store.write()
@@ -287,7 +287,7 @@ class TestProgressStore(object):
             assert store.status == {}
 
 
-class TestRemovebreforeTimetamp(object):
+class TestRemoveBeforeTimetamp(object):
 
     def test_from_time(self):
         ts = before_timestamp_from_options({"time": "2010-12-01T20:12:00"})
