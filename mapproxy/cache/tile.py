@@ -445,13 +445,14 @@ class TileCreator(object):
                                 for _ in range(num_retries):
                                     time.sleep(0.1)
                                     source = self._query_sources(query)
-                                    if hasattr(source, 'source') and isinstance(source.source, Image.Image):
-                                        stat = ImageStat.Stat(source.source)
-                                        # stat = ImageStat.Stat(source.source)
-                                        # source.source.save("/tmp/white_tile_after_reload.png")
-                                        # print(f"Mean band values after reloading: {stat.mean}")
-                                        if not (stat.mean[0] == 255.0 and stat.mean[1] == 255.0 and stat.mean[2] == 255.0):
-                                            break  # Got a non-white tile, we're done
+                                    if hasattr(source, 'source'):
+                                        if isinstance(source.source, Image.Image):
+                                            stat = ImageStat.Stat(source.source)
+                                            # stat = ImageStat.Stat(source.source)
+                                            # source.source.save("/tmp/white_tile_after_reload.png")
+                                            # print(f"Mean band values after reloading: {stat.mean}")
+                                            if not (stat.mean[0] == 255.0 and stat.mean[1] == 255.0 and stat.mean[2] == 255.0):
+                                                break  # Got a non-white tile, we're done
                 ### END TEMPORARY HACK ###
                 ##########################
                 if source.authorize_stale and self.is_stale(tile):
