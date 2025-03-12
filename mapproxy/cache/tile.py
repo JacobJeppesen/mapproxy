@@ -441,7 +441,7 @@ class TileCreator(object):
                                 # source.source.save("/tmp/white_tile.png")
                                 # Try reloading the tile from the source after a short delay and see if it fixes the issue
                                 import time
-                                num_retries = 3
+                                num_retries = 5
                                 for _ in range(num_retries):
                                     time.sleep(0.1)
                                     source = self._query_sources(query)
