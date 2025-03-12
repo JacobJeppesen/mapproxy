@@ -441,11 +441,17 @@ class TileCreator(object):
                                 # source.source.save("/tmp/white_tile.png")
                                 # Try reloading the tile from the source after a short delay and see if it fixes the issue
                                 import time
-                                time.sleep(0.05)
-                                source = self._query_sources(query)
-                                # stat = ImageStat.Stat(source.source)
-                                # source.source.save("/tmp/white_tile_after_reload.png")
-                                # print(f"Mean band values after reloading: {stat.mean}")
+                                num_retries = 3
+                                for _ in range(num_retries):
+                                    time.sleep(0.1)
+                                    source = self._query_sources(query)
+                                    if hasattr(source, 'source') and isinstance(source.source, Image.Image):
+                                        stat = ImageStat.Stat(source.source)
+                                        # stat = ImageStat.Stat(source.source)
+                                        # source.source.save("/tmp/white_tile_after_reload.png")
+                                        # print(f"Mean band values after reloading: {stat.mean}")
+                                        if not (stat.mean[0] == 255.0 and stat.mean[1] == 255.0 and stat.mean[2] == 255.0):
+                                            break  # Got a non-white tile, we're done
                 ### END TEMPORARY HACK ###
                 ##########################
                 if source.authorize_stale and self.is_stale(tile):
